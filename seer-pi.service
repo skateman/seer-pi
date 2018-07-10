@@ -1,0 +1,9 @@
+[Unit]
+Description=Simple RTSP forwarder for the Raspberry Pi Camera
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/seer-pi
+
+[Install]
+WantedBy=multi-user.target

@@ -1,2 +1,2 @@
 # seer-pi
-Simple security camera system based on Raspberry Pi
+Simple RTSP forwarder for the Raspberry Pi Camera

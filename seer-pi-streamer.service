@@ -1,9 +1,0 @@
-[Unit]
-Description=MJPG stream server for the Raspberry Pi Camera module
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/seer-pi-streamer
-
-[Install]
-WantedBy=multi-user.target

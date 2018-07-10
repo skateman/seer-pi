@@ -1,0 +1,77 @@
+#!/usr/bin/env python
+
+import os
+import io
+import logging
+import numpy
+import ConfigParser
+
+from subprocess import Popen, PIPE
+from requests import post
+
+from picamera import PiCamera
+from picamera import PiCameraCircularIO
+from picamera.array import PiMotionAnalysis
+
+# TODO: refactor this configuration management
+config = ConfigParser.ConfigParser()
+config.readfp(open('/etc/seer-pi.conf'))
+
+stream_url = config.get('stream', 'url')
+
+still_name = config.get('still', 'file')
+still_url = config.get('still', 'url')
+still_freq = int(config.get('still', 'frequency'))
+
+resolution = (int(config.get('image', 'width')), int(config.get('image', 'height')))
+fps = int(config.get('image', 'fps'))
+vflip = config.get('image', 'vflip') == 'True'
+hflip = config.get('image', 'hflip') == 'True'
+
+class MotionOutput(PiMotionAnalysis):
+    def analyse(self, arr):
+        arr = numpy.sqrt(numpy.square(arr['x'].astype(numpy.float)) + numpy.square(arr['y'].astype(numpy.float))).clip(0, 255).astype(numpy.uint8)
+        if (arr > 60).sum() > 5:
+            # TODO: propagate this information further somehow
+            logging.info("Motion detected!")
+
+class StreamOutput(object):
+    def __init__(self):
+        logging.info('Spawning background forwarding process')
+        self.forwarder = Popen([
+            'ffmpeg',
+            '-i', '-',
+            '-vcodec', 'copy',
+            '-f', 'rtsp',
+            stream_url],
+            stdin = PIPE, stdout = io.open(os.devnull, 'wb'), stderr = io.open(os.devnull, 'wb'), shell = False, close_fds = True)
+
+    def write(self, b):
+        self.forwarder.stdin.write(b)
+
+    def flush(self):
+        logging.info('Waiting for background forwarding process to exit')
+        self.forwarder.stdin.close()
+        self.forwarder.wait()
+
+with PiCamera(resolution = resolution, framerate = fps) as camera:
+    camera.vflip = vflip
+    camera.hflip = hflip
+
+    with PiCameraCircularIO(camera, seconds = 20) as circular:
+        with MotionOutput(camera) as motion:
+            stream = StreamOutput()
+            still = io.BytesIO()
+
+            camera.start_recording(stream, format = 'h264', splitter_port = 1, motion_output = motion)
+            # Store the last 20 seconds of the recording in the circular buffer
+            camera.start_recording(circular, format = 'h264', splitter_port = 2)
+
+            while True:
+                if still_freq > 0:
+                    camera.wait_recording(still_freq)
+                    camera.capture(still, use_video_port = True)
+                    logging.info("Sending snapshot to the remote server")
+                    post(still_url, files = { still_name: still.getvalue() }, data = { 'name': still_name })
+                else:
+                    camera.wait_recording(1)
