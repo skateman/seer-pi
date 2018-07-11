@@ -9,6 +9,7 @@ deploy:
   api_key: ${GH_TOKEN}
   file_glob: true
   file: seer-pi-*.deb
+  skip_cleanup: true
   on:
     tags: true
     repo: skateman/seer-pi
