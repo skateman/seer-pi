@@ -73,5 +73,7 @@ with PiCamera(resolution = resolution, framerate = fps) as camera:
                     camera.capture(still, 'jpeg', use_video_port = True)
                     logging.info("Sending snapshot to the remote server")
                     post(still_url, files = { still_name: still.getvalue() }, data = { 'name': still_name })
+                    still.seek(0)
+                    still.truncate()
                 else:
                     camera.wait_recording(1)
