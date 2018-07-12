@@ -23,6 +23,10 @@ Description: Simple RTSP forwarder the Raspberry Pi Camera
 License: MIT
 EOF
 
+cat <<- EOF > $TMP_OUTPUT/DEBIAN/conffiles
+/etc/seer-pi.conf
+EOF
+
 dpkg-deb --build $TMP_OUTPUT "seer-pi-${TRAVIS_TAG}_armhf.deb"
 
 rm -rf $TMP_OUTPUT
