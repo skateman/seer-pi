@@ -13,20 +13,20 @@ from picamera import PiCamera
 from picamera import PiCameraCircularIO
 from picamera.array import PiMotionAnalysis
 
-# TODO: refactor this configuration management
 config = ConfigParser.ConfigParser()
-config.readfp(open('/etc/seer-pi.conf'))
-
-stream_url = config.get('stream', 'url')
-
-still_name = config.get('still', 'file')
-still_url = config.get('still', 'url')
-still_freq = int(config.get('still', 'frequency'))
-
-resolution = (int(config.get('image', 'width')), int(config.get('image', 'height')))
-fps = int(config.get('image', 'fps'))
-vflip = config.get('image', 'vflip') == 'True'
-hflip = config.get('image', 'hflip') == 'True'
+try:
+    config.readfp(open('/etc/seer-pi.conf'))
+    stream_url = config.get('stream', 'url')
+    still_name = config.get('still', 'file')
+    still_url = config.get('still', 'url')
+    still_freq = int(config.get('still', 'frequency'))
+    resolution = (int(config.get('image', 'width')), int(config.get('image', 'height')))
+    fps = int(config.get('image', 'fps'))
+    vflip = config.get('image', 'vflip') == 'True'
+    hflip = config.get('image', 'hflip') == 'True'
+except:
+    logging.error("Invalid configuration file", sys.exc_info()[0])
+    exit(1)
 
 class MotionOutput(PiMotionAnalysis):
     def analyse(self, arr):
@@ -47,12 +47,20 @@ class StreamOutput(object):
             stdin = PIPE, stdout = io.open(os.devnull, 'wb'), stderr = io.open(os.devnull, 'wb'), shell = False, close_fds = True)
 
     def write(self, b):
-        self.forwarder.stdin.write(b)
+        try:
+            self.forwarder.stdin.write(b)
+        except:
+            logging.error('Networking error!', sys.exc_info()[0])
+            exit(1)
 
     def flush(self):
         logging.info('Waiting for background forwarding process to exit')
-        self.forwarder.stdin.close()
-        self.forwarder.wait()
+        try:
+            self.forwarder.stdin.close()
+            self.forwarder.wait()
+        except:
+            logging.error('Networking error!', sys.exc_info()[0])
+            exit(1)
 
 with PiCamera(resolution = resolution, framerate = fps) as camera:
     camera.vflip = vflip
@@ -69,11 +77,19 @@ with PiCamera(resolution = resolution, framerate = fps) as camera:
 
             while True:
                 if still_freq > 0:
-                    camera.wait_recording(still_freq)
-                    camera.capture(still, 'jpeg', use_video_port = True)
+                    try:
+                        camera.wait_recording(still_freq)
+                        camera.capture(still, 'jpeg', use_video_port = True)
+                    except:
+                        logging.error('Error during capture!', sys.exc_info()[0])
+                        exit(1)
                     logging.info("Sending snapshot to the remote server")
                     post(still_url, files = { still_name: still.getvalue() }, data = { 'name': still_name })
                     still.seek(0)
                     still.truncate()
                 else:
-                    camera.wait_recording(1)
+                    try:
+                        camera.wait_recording(1)
+                    except:
+                        logging.error('Error during capture!', sys.exc_info()[0])
+                        exit(1)
